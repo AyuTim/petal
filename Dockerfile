@@ -22,7 +22,7 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/next.config.ts ./next.config.ts
-COPY --from=builder /app/data /seed-data
+RUN mkdir -p /seed-data
 COPY docker-entrypoint.sh /usr/local/bin/petals-start
 
 RUN chmod +x /usr/local/bin/petals-start && mkdir -p /app/data
