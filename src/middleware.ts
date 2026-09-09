@@ -8,7 +8,8 @@ const SESSION_COOKIE = "petals_session";
  */
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/login" || pathname.startsWith("/s/") || pathname.startsWith("/api/")) {
+  const isPublicAsset = /\.(?:png|jpe?g|gif|webp|svg|ico|woff2?)$/i.test(pathname);
+  if (pathname === "/login" || pathname.startsWith("/s/") || pathname.startsWith("/api/") || isPublicAsset) {
     return NextResponse.next();
   }
   if (request.cookies.get(SESSION_COOKIE)?.value) return NextResponse.next();
