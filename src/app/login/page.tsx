@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, Check, LockKeyhole } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import { BrandWordmark } from "@/components/petal-mark";
 
 function GoogleGlyph() {
@@ -49,15 +49,8 @@ export default function LoginPage() {
           <ArrowRight className="h-4 w-4" strokeWidth={1.8} />
         </a>
 
-        <div className="login-divider"><span>or</span></div>
-
-        <Link href="/" className="login-device-link">
-          Keep using this device for now
-        </Link>
-
         <ul className="login-notes">
           <li><Check className="h-3.5 w-3.5" /> Your lists stay private to your profile.</li>
-          <li><LockKeyhole className="h-3.5 w-3.5" /> The first account on this device keeps the lists already here.</li>
         </ul>
       </section>
     </main>
