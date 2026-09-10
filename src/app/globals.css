@@ -549,6 +549,36 @@ input[type="checkbox"] {
   border-top: 1px solid rgba(226, 232, 240, 0.6);
 }
 
+/* Keep the signed-in profile compact and aligned with the sidebar actions. */
+.sidebar-profile-link {
+  min-width: 0;
+  margin-top: 0.4rem;
+  border-color: rgba(226, 232, 240, 0.72);
+  background: rgba(248, 250, 252, 0.72);
+  padding: 0.55rem 0.65rem;
+}
+
+.sidebar-profile-link:hover {
+  border-color: rgba(203, 213, 225, 0.92);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.sidebar-profile-link .profile-nav-avatar {
+  width: 1.8rem;
+  height: 1.8rem;
+  flex: 0 0 1.8rem;
+  border: 1.5px solid rgba(255, 255, 255, 0.96);
+  border-radius: 0.7rem 0.85rem 0.7rem 0.85rem;
+  box-shadow: 0 3px 8px -5px rgba(15, 23, 42, 0.28);
+}
+
+.sidebar-profile-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .main {
   flex: 1;
   min-width: 0;

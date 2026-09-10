@@ -46,7 +46,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
       <aside className="sidebar w-64 bg-white/80 backdrop-blur-2xl border-r border-slate-200/80 shadow-[1px_0_12px_rgba(15,23,42,0.03)]">
-        <Link href="/" className="sidebar-brand">
+        <Link href="/profile" className="sidebar-brand" aria-label="Open profile">
           <BrandWordmark />
         </Link>
         <div className="sidebar-sections">
@@ -85,19 +85,19 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link className={`nav-item is-quiet ${path === "/settings" ? "is-active" : ""}`} href="/settings">
             <Settings className="h-4 w-4" strokeWidth={2} /> Settings
           </Link>
-          <Link className={`nav-item is-quiet ${path === "/profile" ? "is-active" : ""}`} href="/profile">
+          <Link className={`nav-item is-quiet sidebar-profile-link ${path === "/profile" ? "is-active" : ""}`} href="/profile">
             {data?.profile?.avatarUrl ? (
               <img className="profile-nav-avatar" src={data.profile.avatarUrl} alt="" referrerPolicy="no-referrer" />
             ) : (
               <UserRound className="h-4 w-4" strokeWidth={2} />
             )}
-            {data?.profile?.name || (data?.profile?.provider === "google" ? "Profile" : "Sign in")}
+            <span className="sidebar-profile-label">{data?.profile?.name || (data?.profile?.provider === "google" ? "Profile" : "Sign in")}</span>
           </Link>
         </div>
       </aside>
       <div className="min-w-0 flex-1">
         <div className="topbar">
-          <Link href="/" className="sidebar-brand">
+          <Link href="/profile" className="sidebar-brand" aria-label="Open profile">
             <BrandWordmark />
           </Link>
           <nav className="tabs text-sm">
