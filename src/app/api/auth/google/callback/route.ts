@@ -14,7 +14,10 @@ type GoogleIdentity = {
 };
 
 function loginRedirect(request: NextRequest, error?: string) {
-  const url = new URL("/login", request.url);
+  // Railway forwards requests to the container on localhost. Always send a
+  // browser back to the configured public app URL instead of that internal
+  // address when Google sign-in cannot complete.
+  const url = new URL("/login", appOrigin(request));
   if (error) url.searchParams.set("error", error);
   return url;
 }
@@ -47,14 +50,16 @@ export async function GET(request: NextRequest) {
         grant_type: "authorization_code",
       }),
     });
-    const tokens = (await tokenResponse.json()) as { access_token?: string };
-    if (!tokenResponse.ok || !tokens.access_token) throw new Error("Google did not return an access token.");
+    const tokens = (await tokenResponse.json()) as { access_token?: string; error?: string; error_description?: string };
+    if (!tokenResponse.ok || !tokens.access_token) {
+      throw new Error(`Google token exchange failed (${tokenResponse.status}): ${tokens.error_description ?? tokens.error ?? "no access token returned"}`);
+    }
 
     const identityResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
     const identity = (await identityResponse.json()) as GoogleIdentity;
-    if (!identityResponse.ok || !identity.sub) throw new Error("Google did not return a profile.");
+    if (!identityResponse.ok || !identity.sub) throw new Error(`Google profile lookup failed (${identityResponse.status}).`);
 
     const existing = getOwnerByGoogleSub(identity.sub);
     const legacyOwnerId = request.cookies.get(OWNER_COOKIE)?.value;
@@ -76,7 +81,10 @@ export async function GET(request: NextRequest) {
     response.cookies.set(OWNER_COOKIE, owner.id, authCookieOptions(60 * 60 * 24 * 365 * 5));
     response.cookies.set(GOOGLE_STATE_COOKIE, "", authCookieOptions(0));
     return response;
-  } catch {
+  } catch (error) {
+    // This intentionally excludes credentials and authorization codes while
+    // leaving enough detail in Railway logs to diagnose setup errors.
+    console.error("Google sign-in failed:", error);
     return NextResponse.redirect(loginRedirect(request, "google-sign-in-failed"));
   }
 }
