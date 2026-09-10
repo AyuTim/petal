@@ -6,6 +6,7 @@ import { LogOut, ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/components/providers";
 import { ListSkeleton, Shell } from "@/components/shell";
+import { TagManager } from "@/components/tag-manager";
 
 function initials(name: string | null, email: string | null) {
   const source = (name || email || "Petals").trim();
@@ -90,6 +91,8 @@ export default function ProfilePage() {
             </div>
           </div>
         </section>
+
+        <TagManager />
       </div>
     </Shell>
   );

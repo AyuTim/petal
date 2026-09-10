@@ -16,8 +16,12 @@ const serif = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Petals",
+  title: "petals",
   description: "Private lists for shopping, wishes, and bucket-list plans.",
+  icons: {
+    icon: [{ url: "/petals-flower-logo.png", type: "image/png" }],
+    apple: [{ url: "/petals-flower-logo.png", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

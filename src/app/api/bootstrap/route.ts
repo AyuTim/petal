@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OWNER_COOKIE, SESSION_COOKIE, newOwnerId, ownerIdFrom } from "@/lib/auth";
 import { activityFor, ensureOwner, getList, listCaptures, listSummaries, listTags, markSeeded } from "@/lib/db";
-import { ensureDayTags, ensureSeasonTags, ensureSeasonalLists, seedOwner } from "@/lib/seed";
+import { seedOwner } from "@/lib/seed";
 
 export const runtime = "nodejs";
 
@@ -16,10 +16,6 @@ export async function GET(request: NextRequest) {
   if (owner && !owner.seeded) {
     seedOwner(ownerId);
     markSeeded(ownerId);
-  } else if (owner) {
-    ensureSeasonalLists(ownerId);
-    ensureSeasonTags(ownerId);
-    ensureDayTags(ownerId);
   }
   const lists = listSummaries(ownerId).map((summary) => {
     const list = getList(summary.id)!;

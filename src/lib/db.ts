@@ -15,11 +15,12 @@ import type {
   ShareLink,
   Tag,
 } from "./types";
-import { ACCENT, STARTER_TAGS } from "./palette";
+import { ACCENT } from "./palette";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DB_PATH = path.join(DATA_DIR, "petals.db");
 export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
+const STARTER_WORKSPACE_RESET = "starter-workspace-v1";
 
 let db: DatabaseSync | null = null;
 
@@ -173,6 +174,11 @@ function migrate(d: DatabaseSync) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (owner_id) REFERENCES owners(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS auth_sessions_owner_idx ON auth_sessions(owner_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
   `);
@@ -183,6 +189,50 @@ function migrate(d: DatabaseSync) {
   ensureColumn(d, "owners", "google_sub", "TEXT");
   ensureColumn(d, "owners", "auth_provider", "TEXT");
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS owners_google_sub_unique ON owners(google_sub) WHERE google_sub IS NOT NULL;");
+  applyStarterWorkspaceReset(d);
+}
+
+/**
+ * A deliberate, one-time clean slate for the first public Petals workspace.
+ * Profiles and their preferences stay intact; every piece of workspace content
+ * is removed and each owner is marked for the new, single-list starter guide.
+ */
+function applyStarterWorkspaceReset(d: DatabaseSync) {
+  let didReset = false;
+  d.exec("BEGIN EXCLUSIVE;");
+  try {
+    const alreadyApplied = d.prepare("SELECT 1 FROM app_state WHERE key = ?").get(STARTER_WORKSPACE_RESET);
+    if (!alreadyApplied) {
+      d.exec(`
+        DELETE FROM item_tags;
+        DELETE FROM general_item_order;
+        DELETE FROM attachments;
+        DELETE FROM items;
+        DELETE FROM share_links;
+        DELETE FROM activity;
+        DELETE FROM versions;
+        DELETE FROM captures;
+        DELETE FROM tags;
+        DELETE FROM lists;
+      `);
+      d.prepare("UPDATE owners SET seeded = 0").run();
+      d.prepare("INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)").run(
+        STARTER_WORKSPACE_RESET,
+        "applied",
+        now(),
+      );
+      didReset = true;
+    }
+    d.exec("COMMIT;");
+  } catch (error) {
+    d.exec("ROLLBACK;");
+    throw error;
+  }
+
+  if (didReset) {
+    fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
 }
 
 function ensureColumn(d: DatabaseSync, table: string, column: string, definition: string) {
@@ -210,14 +260,6 @@ export function ensureOwner(ownerId: string) {
       JSON.stringify(defaultSettings()),
       now(),
     );
-    for (const t of STARTER_TAGS) {
-      d.prepare("INSERT INTO tags (id, owner_device_id, name, color) VALUES (?, ?, ?, ?)").run(
-        id(),
-        ownerId,
-        t.name,
-        t.color,
-      );
-    }
   }
   return getOwner(ownerId);
 }
