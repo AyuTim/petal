@@ -67,6 +67,7 @@ import { isGeneralList, withGeneralAggregation } from "@/lib/lists";
 import type { ListItem, ListVersion, MoodLayout, PetalList, Tag, ViewerRole } from "@/lib/types";
 import { useApp } from "@/components/providers";
 import { BloomingFlower } from "@/components/BloomingFlower";
+import { FileDropInput } from "@/components/file-drop-input";
 import {
   EmptyState,
   ListSkeleton,
@@ -1663,25 +1664,15 @@ function ItemRow({
       {hasActions ? (
         <div className={rowActionsClass}>
           {canEdit && !showThumb ? (
-            <label
+            <FileDropInput
+              accept="image/*"
+              ariaLabel="Add photo"
               className="item-add-photo p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors inline-flex items-center justify-center"
-              aria-label="Add photo"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
+              disabled={uploading}
+              onFile={(file) => void attachPhoto(file)}
             >
               <ImagePlus className="w-4 h-4 stroke-[1.75]" aria-hidden />
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                disabled={uploading}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.target.value = "";
-                  if (file) void attachPhoto(file);
-                }}
-              />
-            </label>
+            </FileDropInput>
           ) : null}
           {canEdit ? (
             <button
@@ -2492,22 +2483,18 @@ function MoodBoard({
     <section className="list-body mood-body">
       <div className="mood-board-frame">
         {canEdit ? (
-          <label className="mood-ghost mood-ghost-dock" aria-label="Add a photo">
+          <FileDropInput
+            accept="image/*"
+            ariaLabel="Add a photo to the mood board"
+            className="mood-ghost mood-ghost-dock"
+            disabled={Boolean(adding)}
+            onFile={(file) => void addPhoto(file)}
+          >
             <span className="mood-ghost-icon" aria-hidden>
               <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
             </span>
             <span>{adding || "Add a photo"}</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void addPhoto(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </FileDropInput>
         ) : null}
         <div
           id="mood-export"
@@ -3389,19 +3376,14 @@ function ItemPhotoFrame({
           <button type="button" aria-label="Remove photo" onClick={() => onRemove(att.id)}>
             <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
-          <label>
+          <FileDropInput
+            accept="image/*"
+            ariaLabel="Replace photo"
+            onFile={(file) => onReplace(file, att.id)}
+          >
             <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} />
             <span className="sr-only">Replace photo</span>
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) onReplace(file, att.id);
-              }}
-            />
-          </label>
+          </FileDropInput>
         </div>
       ) : null}
     </div>
@@ -3601,20 +3583,16 @@ function ItemModal({
             />
             {canEdit && owner ? (
               <div className="item-herbarium-overlay">
-                <label className="item-herbarium-overlay-btn">
+                <FileDropInput
+                  accept="image/*"
+                  ariaLabel="Change photo"
+                  className="item-herbarium-overlay-btn"
+                  disabled={Boolean(uploading)}
+                  onFile={(file) => void replacePhoto(file, hero.id)}
+                >
                   <ImagePlus className="h-3.5 w-3.5" strokeWidth={2} />
                   {uploading || "Change photo"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void replacePhoto(file, hero.id);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
+                </FileDropInput>
                 <button
                   type="button"
                   className="item-herbarium-overlay-btn is-remove"
@@ -3627,39 +3605,31 @@ function ItemModal({
             ) : null}
           </div>
         ) : showFullPhotoMount ? (
-          <label className="item-herbarium-drop">
+          <FileDropInput
+            accept="image/*"
+            ariaLabel="Add memory or photo"
+            className="item-herbarium-drop"
+            disabled={Boolean(uploading)}
+            onFile={(file) => void uploadPhoto(file)}
+          >
             <span className="item-herbarium-icon">
               <ImagePlus className="h-5 w-5" strokeWidth={1.75} />
             </span>
             <span className="px-3 text-center text-xs font-medium">{uploading || "Add memory or photo"}</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void uploadPhoto(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </FileDropInput>
         ) : showCompactPhotoAdd ? (
-          <label className="item-herbarium-drop is-compact">
+          <FileDropInput
+            accept="image/*"
+            ariaLabel="Add an optional photo"
+            className="item-herbarium-drop is-compact"
+            disabled={Boolean(uploading)}
+            onFile={(file) => void uploadPhoto(file)}
+          >
             <span className="item-herbarium-icon">
               <ImagePlus className="h-3.5 w-3.5" strokeWidth={1.75} />
             </span>
             <span className="text-xs font-medium">{uploading || "Add a photo (optional)"}</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void uploadPhoto(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          </FileDropInput>
         ) : null}
         {photos.length > 1 ? (
           <div className="item-photo-thumbs mt-2.5 justify-start">

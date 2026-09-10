@@ -5,6 +5,7 @@ import { ImagePlus, Link2, Plus, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { looksLikeImageUrl } from "@/lib/media";
 import type { QuickCapture } from "@/lib/types";
+import { FileDropInput } from "./file-drop-input";
 import { useApp } from "./providers";
 
 export function QuickCaptureDock({
@@ -129,18 +130,17 @@ export function QuickCaptureDock({
               />
             </div>
 
-            <label className="group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50">
+            <FileDropInput
+              accept="image/*,.pdf,.txt,.doc,.docx"
+              ariaLabel="Add a photo or attachment"
+              className="group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50"
+              onFile={setFile}
+            >
               <ImagePlus className="h-4 w-4 text-slate-400 transition-colors group-hover:text-slate-600" />
               <span className="text-xs font-medium text-slate-500 transition-colors group-hover:text-slate-700">
                 {file ? file.name : "Add photo or attachment"}
               </span>
-              <input
-                type="file"
-                accept="image/*,.pdf,.txt,.doc,.docx"
-                onChange={(event) => setFile(event.target.files?.[0] || null)}
-                className="sr-only"
-              />
-            </label>
+            </FileDropInput>
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-2">
               <button

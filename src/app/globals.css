@@ -1266,7 +1266,9 @@ button.capture-fab:active {
   transition: background 140ms var(--ease), color 140ms var(--ease);
 }
 
-.item-herbarium-overlay-btn:hover {
+.item-herbarium-overlay-btn:hover,
+.item-herbarium-overlay-btn:focus-visible,
+.item-herbarium-overlay-btn.is-file-dragging {
   background: #fff;
   color: #0f172a;
 }
@@ -1311,7 +1313,9 @@ button.capture-fab:active {
   display: none;
 }
 
-.item-herbarium-drop:hover {
+.item-herbarium-drop:hover,
+.item-herbarium-drop:focus-visible,
+.item-herbarium-drop.is-file-dragging {
   border-color: rgba(100, 116, 139, 0.55);
   color: #64748b;
   background: rgba(241, 245, 249, 0.95);
@@ -2575,7 +2579,8 @@ button.create-list-pill:hover {
 }
 
 .item-photo-actions button,
-.item-photo-actions label {
+.item-photo-actions label,
+.item-photo-actions .file-drop-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2589,7 +2594,10 @@ button.create-list-pill:hover {
 }
 
 .item-photo-actions button:hover,
-.item-photo-actions label:hover {
+.item-photo-actions label:hover,
+.item-photo-actions .file-drop-input:hover,
+.item-photo-actions .file-drop-input:focus-visible,
+.item-photo-actions .file-drop-input.is-file-dragging {
   background: rgba(255, 255, 255, 0.28);
 }
 
@@ -4205,7 +4213,9 @@ body.memory-day-open .capture-fab {
 }
 
 .item-add-photo:hover,
-.item-add-photo:focus-within {
+.item-add-photo:focus-within,
+.item-add-photo:focus-visible,
+.item-add-photo.is-file-dragging {
   color: #334155;
   background: #f1f5f9;
 }
@@ -6736,7 +6746,9 @@ button.capture-fab.dewdrop-control:hover {
     transform 200ms var(--ease);
 }
 
-.mood-ghost:hover {
+.mood-ghost:hover,
+.mood-ghost:focus-visible,
+.mood-ghost.is-file-dragging {
   color: #1e293b;
   background: rgba(255, 255, 255, 0.7);
   box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.1);
@@ -6755,7 +6767,9 @@ button.capture-fab.dewdrop-control:hover {
   color: #94a3b8;
 }
 
-.mood-ghost:hover .mood-ghost-icon {
+.mood-ghost:hover .mood-ghost-icon,
+.mood-ghost:focus-visible .mood-ghost-icon,
+.mood-ghost.is-file-dragging .mood-ghost-icon {
   color: #64748b;
   background: rgba(255, 255, 255, 0.95);
 }
@@ -8471,6 +8485,16 @@ button.capture-fab.dewdrop-control:hover {
   right: 0.4rem;
   bottom: 0.65rem;
   transform: rotate(115deg);
+}
+
+/* Every image picker accepts click, drag-and-drop, and a pasted clipboard image. */
+.file-drop-input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--list-accent-color, #94a3b8) 55%, #ffffff);
+  outline-offset: 3px;
+}
+
+.file-drop-input.is-file-dragging {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--list-accent-color, #94a3b8) 18%, transparent), inset 0 1px 1px rgba(255, 255, 255, 0.9);
 }
 
 .toast.is-filed {
