@@ -1,7 +1,7 @@
 export type ListType = "bucket" | "wish" | "shopping" | "todo" | "custom";
 export type CoverStyle = "solid" | "gradient" | "pattern" | "image";
 export type FontStyle = "sans" | "serif" | "script";
-export type SharePermission = "view" | "edit";
+export type SharePermission = "view" | "check" | "edit";
 export type ActorType = "owner" | "guest";
 export type Priority = "low" | "medium" | "high" | null;
 export type CaptureType = "text" | "link" | "photo" | "file";
@@ -148,4 +148,4 @@ export type ListVersion = {
   createdAt: string;
 };
 
-export type ViewerRole = "owner" | "view" | "edit";
+export type ViewerRole = "owner" | "view" | "check" | "edit";

@@ -57,6 +57,7 @@ import {
   Sparkles,
   Trash2,
   Undo2,
+  UsersRound,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -89,6 +90,25 @@ import {
 
 type View = "list" | "mood" | "timeline" | "memories";
 
+type SharedViewer = { sessionId: string; name: string | null; lastSeen: string };
+type CompletionAttribution = { itemId: string; guestName: string };
+
+function sharePermissionLabel(permission: ViewerRole | undefined) {
+  if (permission === "edit") return "Can edit";
+  if (permission === "check") return "Can check off";
+  return "View only";
+}
+
+function sharedViewerSession(token: string) {
+  if (typeof window === "undefined") return "";
+  const key = `petals-share-viewer:${token}`;
+  const existing = sessionStorage.getItem(key);
+  if (existing) return existing;
+  const sessionId = window.crypto?.randomUUID?.() || `guest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+  sessionStorage.setItem(key, sessionId);
+  return sessionId;
+}
+
 const dropAnimation: DropAnimation = {
   duration: 0,
   sideEffects: defaultDropAnimationSideEffects({
@@ -115,7 +135,10 @@ export function ListWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [itemId, setItemId] = useState<string | null>(search.get("item"));
   const [guestName, setGuestName] = useState("");
+  const [showGuestName, setShowGuestName] = useState(false);
   const [askedName, setAskedName] = useState(false);
+  const [shareViewers, setShareViewers] = useState<SharedViewer[]>([]);
+  const [completionAttributions, setCompletionAttributions] = useState<CompletionAttribution[]>([]);
   const [milestone, setMilestone] = useState<number | null>(null);
   const prevPctRef = useRef<{ key: string | null; pct: number | null }>({ key: null, pct: null });
   const [sort, setSort] = useState("custom");
@@ -127,10 +150,18 @@ export function ListWorkspace({
   async function load() {
     try {
       if (shareToken) {
-        const result = await api<{ list: PetalList; permission: ViewerRole }>(`/api/share/${shareToken}`);
+        const result = await api<{
+          list: PetalList;
+          permission: ViewerRole;
+          viewers?: SharedViewer[];
+          completionAttributions?: CompletionAttribution[];
+        }>(`/api/share/${shareToken}`);
         setList(result.list);
         setRole(result.permission);
-        if (result.permission === "edit" && !sessionStorage.getItem("ll-guest") && !askedName) setAskedName(true);
+        setShareViewers(result.viewers || []);
+        setCompletionAttributions(result.completionAttributions || []);
+        const configured = sessionStorage.getItem(`petals-guest-ready:${shareToken}`);
+        if ((result.permission === "edit" || result.permission === "check") && !configured && !askedName) setAskedName(true);
       } else if (listId) {
         const result = await api<{ list: PetalList; versions: ListVersion[] }>(`/api/lists/${listId}`);
         setList(result.list);
@@ -147,6 +178,12 @@ export function ListWorkspace({
     void load();
   }, [listId, shareToken]);
 
+  useEffect(() => {
+    if (!shareToken || typeof window === "undefined") return;
+    setGuestName(sessionStorage.getItem("ll-guest") || "");
+    setShowGuestName(sessionStorage.getItem(`petals-guest-show-name:${shareToken}`) === "true");
+  }, [shareToken]);
+
   const progressKey = listId || shareToken || null;
   const aggregator = Boolean(list && !shareToken && isGeneralList(list));
   const displayList = list ? (aggregator ? withGeneralAggregation(list, data?.lists ?? []) : list) : null;
@@ -154,7 +191,41 @@ export function ListWorkspace({
   const complete = items.filter((i) => i.completed).length;
   const pct = items.length ? Math.round((complete / items.length) * 100) : 0;
   const canEdit = role === "owner" || role === "edit";
+  const canCheck = canEdit || role === "check";
+  const completedBy = useMemo(
+    () => Object.fromEntries(completionAttributions.map((entry) => [entry.itemId, entry.guestName])),
+    [completionAttributions],
+  );
   const settings = data?.settings;
+
+  useEffect(() => {
+    if (!shareToken || typeof window === "undefined") return;
+    const sessionId = sharedViewerSession(shareToken);
+    if (!sessionId) return;
+    let cancelled = false;
+    const announce = async () => {
+      try {
+        const result = await api<{ viewers: SharedViewer[] }>(`/api/share/${shareToken}/presence`, {
+          method: "POST",
+          body: JSON.stringify({ sessionId, name: guestName.trim(), showName: showGuestName }),
+        });
+        if (!cancelled) setShareViewers(result.viewers || []);
+      } catch {
+        // Presence is optional; a transient heartbeat failure should not interrupt the shared list.
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void announce();
+    };
+    void announce();
+    const interval = window.setInterval(announce, 30_000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [guestName, shareToken, showGuestName]);
 
   useEffect(() => {
     // Only celebrate when progress crosses a milestone while staying on the same list.
@@ -215,11 +286,21 @@ export function ListWorkspace({
   async function mutateItem(action: string, payload: Record<string, unknown>) {
     if (!list) return;
     if (shareToken) {
-      const result = await api<{ list: PetalList }>(`/api/share/${shareToken}`, {
+      const result = await api<{
+        list: PetalList;
+        viewers?: SharedViewer[];
+        completionAttributions?: CompletionAttribution[];
+      }>(`/api/share/${shareToken}`, {
         method: "POST",
-        body: JSON.stringify({ ...payload, action, guestName: guestName || sessionStorage.getItem("ll-guest") || "Guest" }),
+        body: JSON.stringify({
+          ...payload,
+          action,
+          guestName: showGuestName ? guestName.trim() || sessionStorage.getItem("ll-guest") || null : null,
+        }),
       });
       setList(result.list);
+      setShareViewers(result.viewers || []);
+      setCompletionAttributions(result.completionAttributions || []);
     } else if (action === "create") {
       const destId = typeof payload.listId === "string" && payload.listId ? payload.listId : list.id;
       const result = await api<{ list: PetalList }>(`/api/lists/${destId}/items`, { method: "POST", body: JSON.stringify(payload.item) });
@@ -311,7 +392,7 @@ export function ListWorkspace({
 
   return (
     <div className={`list-page ${fontClass}`} style={accentVars(list.color) as React.CSSProperties}>
-      {preview ? <div className="mb-3 border-b border-[var(--line)] pb-2 text-sm" style={{ color: "var(--muted)" }}>Share preview · {role === "edit" ? "Can edit" : "View only"}</div> : null}
+      {preview ? <div className="mb-3 border-b border-[var(--line)] pb-2 text-sm" style={{ color: "var(--muted)" }}>Share preview · {sharePermissionLabel(role)}</div> : null}
       <header className="list-head">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -330,9 +411,10 @@ export function ListWorkspace({
           </div>
           <p className="page-sub mt-1 text-sm font-normal text-slate-500">
             {listCountLabel(list.type, items.length, complete)}
-            {list.share?.active && role === "owner" ? ` · ${list.share.permission === "edit" ? "Can edit" : "View only"}` : null}
+            {list.share?.active && role === "owner" ? ` · ${sharePermissionLabel(list.share.permission)}` : null}
             {list.archivedAt ? " · Archived" : null}
           </p>
+          {shareToken ? <SharePresence viewers={shareViewers} /> : null}
           {showDescription(list.description) || productList || (items.length > 0 && !productList) ? (
             <div className="list-head-body">
               {showDescription(list.description) ? <p className="list-desc">{list.description}</p> : null}
@@ -455,6 +537,8 @@ export function ListWorkspace({
                 list={displayList}
                 aggregator={aggregator}
                 canEdit={canEdit}
+                canCheck={canCheck}
+                completedBy={completedBy}
                 reorderable
                 sensors={sensors}
                 sort={sort}
@@ -525,13 +609,30 @@ export function ListWorkspace({
       ) : null}
 
       {askedName ? (
-        <Modal open title="What should we call you?" onClose={() => setAskedName(false)}>
-          <p className="mb-3 text-sm" style={{ color: "var(--muted)" }}>Optional. Edits will be marked as “edited by guest.”</p>
+        <Modal
+          open
+          title="What should we call you?"
+          onClose={() => {
+            if (shareToken) sessionStorage.setItem(`petals-guest-ready:${shareToken}`, "true");
+            setAskedName(false);
+          }}
+        >
+          <p className="mb-3 text-sm" style={{ color: "var(--muted)" }}>Optional. You decide whether your name appears below the items you check off.</p>
           <input className="field" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="A first name is plenty" />
+          <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={showGuestName} onChange={(event) => setShowGuestName(event.target.checked)} />
+            Show my name with my changes
+          </label>
           <button
             className="primary-btn mt-4"
             onClick={() => {
-              sessionStorage.setItem("ll-guest", guestName || "Guest");
+              const name = guestName.trim();
+              if (name) sessionStorage.setItem("ll-guest", name);
+              else sessionStorage.removeItem("ll-guest");
+              if (shareToken) {
+                sessionStorage.setItem(`petals-guest-ready:${shareToken}`, "true");
+                sessionStorage.setItem(`petals-guest-show-name:${shareToken}`, String(showGuestName));
+              }
               setAskedName(false);
             }}
           >
@@ -1176,11 +1277,53 @@ function StyleModal({ list, open, onClose, onPatch }: { list: PetalList; open: b
   );
 }
 
+function SharePresence({ viewers, showEmpty = false }: { viewers: SharedViewer[]; showEmpty?: boolean }) {
+  if (!viewers.length && !showEmpty) return null;
+  const named = viewers.flatMap((viewer) => (viewer.name ? [viewer.name] : []));
+  const anonymous = viewers.length - named.length;
+  const names = named.slice(0, 2).join(", ");
+  const extraNamed = named.length > 2 ? ` +${named.length - 2}` : "";
+  const label = !viewers.length
+    ? "No guests viewing right now"
+    : names
+      ? `${names}${extraNamed}${anonymous ? ` + ${anonymous} guest${anonymous === 1 ? "" : "s"}` : ""} viewing`
+      : `${viewers.length} guest${viewers.length === 1 ? "" : "s"} viewing`;
+  return (
+    <div className="share-presence" aria-live="polite">
+      <UsersRound className="h-3.5 w-3.5" aria-hidden />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function ShareModal({ list, open, onClose, onReload }: { list: PetalList; open: boolean; onClose: () => void; onReload: () => Promise<void> }) {
   const { setToast } = useApp();
   const share = list.share;
   const active = Boolean(share?.active);
   const url = active && typeof window !== "undefined" ? `${window.location.origin}/s/${share!.token}` : "";
+  const [viewers, setViewers] = useState<SharedViewer[]>([]);
+
+  useEffect(() => {
+    if (!open || !active || !share?.token) {
+      setViewers([]);
+      return;
+    }
+    let cancelled = false;
+    const loadViewers = async () => {
+      try {
+        const result = await api<{ viewers: SharedViewer[] }>(`/api/share/${share.token}/presence`);
+        if (!cancelled) setViewers(result.viewers || []);
+      } catch {
+        if (!cancelled) setViewers([]);
+      }
+    };
+    void loadViewers();
+    const interval = window.setInterval(loadViewers, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [active, open, share?.token]);
 
   async function copyLink(link: string) {
     try {
@@ -1191,7 +1334,7 @@ function ShareModal({ list, open, onClose, onReload }: { list: PetalList; open: 
     }
   }
 
-  async function enableShare(permission: "view" | "edit") {
+  async function enableShare(permission: "view" | "check" | "edit") {
     const result = await api<{ share: { token: string; active: boolean } }>(`/api/lists/${list.id}/share`, {
       method: "POST",
       body: JSON.stringify({ permission }),
@@ -1235,6 +1378,14 @@ function ShareModal({ list, open, onClose, onReload }: { list: PetalList; open: 
         </button>
         <button
           type="button"
+          className={`share-list-action${active && share?.permission === "check" ? " is-on" : ""}`}
+          onClick={() => void enableShare("check")}
+        >
+          <span className="share-list-action-title">Can check off</span>
+          <span className="share-list-action-meta">Mark items done, nothing else</span>
+        </button>
+        <button
+          type="button"
           className={`share-list-action${active && share?.permission === "edit" ? " is-on" : ""}`}
           onClick={() => void enableShare("edit")}
         >
@@ -1254,7 +1405,7 @@ function ShareModal({ list, open, onClose, onReload }: { list: PetalList; open: 
             <Copy className="share-list-url-icon" strokeWidth={1.75} aria-hidden />
           </button>
           <div className="share-list-status">
-            <span>Sharing · {share?.permission === "edit" ? "can edit" : "view only"}</span>
+            <span>Sharing · {sharePermissionLabel(share?.permission)}</span>
             <div className="share-list-secondary">
               <button type="button" className="share-list-text-btn" onClick={() => void regenerateShare()}>
                 Regenerate
@@ -1264,6 +1415,7 @@ function ShareModal({ list, open, onClose, onReload }: { list: PetalList; open: 
               </button>
             </div>
           </div>
+          <SharePresence viewers={viewers} showEmpty />
           <Link className="share-list-preview" href={`/s/${share?.token}?preview=1`}>
             Open preview
           </Link>
@@ -1277,6 +1429,8 @@ function ListView({
   list,
   aggregator,
   canEdit,
+  canCheck,
+  completedBy,
   reorderable = true,
   sensors,
   sort,
@@ -1289,6 +1443,8 @@ function ListView({
   list: PetalList;
   aggregator?: boolean;
   canEdit: boolean;
+  canCheck: boolean;
+  completedBy: Record<string, string>;
   reorderable?: boolean;
   sensors: ReturnType<typeof useSensors>;
   sort: string;
@@ -1412,10 +1568,12 @@ function ListView({
                           shop={shop}
                           currency={list.currency}
                           canEdit={canEdit}
+                          canCheck={canCheck}
+                          completedBy={completedBy[item.id]}
                           drag={drag}
                           onOpen={() => onOpen(item.id)}
                           onToggle={() => {
-                            if (!canEdit) return;
+                            if (!canCheck) return;
                             if (!item.completed) setPetalBurst((current) => current + 1);
                             void onMutate("update", { itemId: item.id, patch: { completed: !item.completed } });
                           }}
@@ -1437,6 +1595,7 @@ function ListView({
                   shop={shop}
                   currency={list.currency}
                   canEdit={false}
+                  canCheck={false}
                   onOpen={() => undefined}
                   onToggle={() => undefined}
                 />
@@ -1541,6 +1700,8 @@ function ItemRow({
   shop,
   currency,
   canEdit,
+  canCheck = false,
+  completedBy,
   drag,
   onOpen,
   onToggle,
@@ -1551,6 +1712,8 @@ function ItemRow({
   shop: boolean;
   currency: string;
   canEdit?: boolean;
+  canCheck?: boolean;
+  completedBy?: string;
   drag?: ItemDragHandle;
   onOpen: () => void;
   onToggle: () => void;
@@ -1567,7 +1730,7 @@ function ItemRow({
   const store = shop ? item.store : null;
   const price = shop && item.price != null ? money(item.price, item.currency || currency) : null;
   const meta = [store, price].filter(Boolean).join(" · ");
-  const showMeta = Boolean(meta || (shop && item.purchased));
+  const showMeta = Boolean(meta || (shop && item.purchased) || (item.completed && completedBy));
   const canDrag = Boolean(canEdit && drag && !drag.disabled);
   const monthLabel = date && !item.completed ? prettyMonth(date) : null;
   const showThumb = Boolean(visual) && !thumbFailed;
@@ -1592,7 +1755,7 @@ function ItemRow({
       const uploaded = await api<{ url: string; filename: string }>("/api/upload", { method: "POST", body: form });
       await api(`/api/items/${item.id}/attachments`, {
         method: "POST",
-        body: JSON.stringify({ fileUrl: uploaded.url, filename: uploaded.filename, type: "image", altText: file.name, isShared: false }),
+        body: JSON.stringify({ fileUrl: uploaded.url, filename: uploaded.filename, type: "image", altText: file.name, isShared: true }),
       });
       await onReload();
     } finally {
@@ -1619,7 +1782,7 @@ function ItemRow({
           <GripVertical className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
         </button>
       ) : null}
-      <ItemCheck checked={item.completed} onChange={handleToggle} label={`Mark ${item.title} complete`} />
+      <ItemCheck checked={item.completed} onChange={handleToggle} label={`Mark ${item.title} complete`} disabled={!canCheck} />
       {showThumb ? (
         <span className="item-thumb-frame">
           <img src={visual!} alt="" onError={() => setThumbFailed(true)} />
@@ -1644,6 +1807,7 @@ function ItemRow({
                 Purchased
               </span>
             ) : null}
+            {item.completed && completedBy ? <span className="item-completed-by">Checked off by {completedBy}</span> : null}
           </span>
         ) : null}
       </button>
@@ -1721,14 +1885,16 @@ function ItemRow({
   );
 }
 
-function ItemCheck({ checked, onChange, label }: { checked: boolean; onChange: () => void; label: string }) {
+function ItemCheck({ checked, onChange, label, disabled = false }: { checked: boolean; onChange: () => void; label: string; disabled?: boolean }) {
   return (
     <motion.button
       type="button"
-      className={`item-check flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-[background-color,border-color,box-shadow] duration-150 ${
+      className={`item-check flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,box-shadow,opacity] duration-150 ${
+        disabled ? "cursor-default opacity-70" : "cursor-pointer"
+      } ${
         checked
           ? "is-on border-[var(--list-accent-color)] bg-[var(--list-accent-color)] text-zinc-950 shadow-sm"
-          : "border-zinc-300 bg-white/80 hover:border-zinc-400"
+          : `border-zinc-300 bg-white/80${disabled ? "" : " hover:border-zinc-400"}`
       }`}
       style={
         checked
@@ -1739,6 +1905,7 @@ function ItemCheck({ checked, onChange, label }: { checked: boolean; onChange: (
           : undefined
       }
       onClick={onChange}
+      disabled={disabled}
       aria-pressed={checked}
       aria-label={label}
       whileTap={{ scale: 0.92 }}
@@ -2311,7 +2478,7 @@ function MoodBoard({
       if (newest) {
         await api(`/api/items/${newest.id}/attachments`, {
           method: "POST",
-          body: JSON.stringify({ fileUrl: uploaded.url, filename: uploaded.filename, type: "image", altText: file.name, isShared: false }),
+          body: JSON.stringify({ fileUrl: uploaded.url, filename: uploaded.filename, type: "image", altText: file.name, isShared: true }),
         });
         if (!newest.moodLayout) {
           await api(`/api/items/${newest.id}`, {
@@ -3511,7 +3678,7 @@ function ItemModal({
       const uploaded = await api<{ url: string; filename: string; contentType: string }>("/api/upload", { method: "POST", body: form });
       await api(`/api/items/${current.id}/attachments`, {
         method: "POST",
-        body: JSON.stringify({ fileUrl: uploaded.url, filename: uploaded.filename, type: "image", altText: file.name, isShared: false }),
+        body: JSON.stringify({ fileUrl: uploaded.url, filename: uploaded.filename, type: "image", altText: file.name, isShared: true }),
       });
       await onReload();
       setUploading("");

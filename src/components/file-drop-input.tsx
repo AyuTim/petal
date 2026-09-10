@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { ImageCropDialog } from "./image-crop-dialog";
 
 type FileDropInputProps = {
   accept: string;
@@ -18,6 +19,7 @@ type FileDropInputProps = {
 export function FileDropInput({ accept, ariaLabel, className = "", children, disabled = false, onFile }: FileDropInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   function accepts(file: File) {
     return accept.split(",").some((rule) => {
@@ -32,7 +34,12 @@ export function FileDropInput({ accept, ariaLabel, className = "", children, dis
   function choose(files: FileList | File[] | null) {
     if (disabled || !files) return;
     const file = Array.from(files).find(accepts);
-    if (file) onFile(file);
+    if (!file) return;
+    if (file.type.startsWith("image/")) {
+      setCropFile(file);
+      return;
+    }
+    onFile(file);
   }
 
   function hasFiles(event: DragEvent<HTMLDivElement>) {
@@ -44,7 +51,8 @@ export function FileDropInput({ accept, ariaLabel, className = "", children, dis
   }
 
   return (
-    <div
+    <>
+      <div
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-label={ariaLabel}
@@ -89,8 +97,8 @@ export function FileDropInput({ accept, ariaLabel, className = "", children, dis
         choose(files);
       }}
     >
-      {children}
-      <input
+        {children}
+        <input
         ref={inputRef}
         type="file"
         accept={accept}
@@ -101,7 +109,23 @@ export function FileDropInput({ accept, ariaLabel, className = "", children, dis
           choose(event.target.files);
           event.target.value = "";
         }}
-      />
-    </div>
+        />
+      </div>
+      {cropFile ? (
+        <ImageCropDialog
+          file={cropFile}
+          onCancel={() => setCropFile(null)}
+          onUseOriginal={() => {
+            const original = cropFile;
+            setCropFile(null);
+            onFile(original);
+          }}
+          onConfirm={(cropped) => {
+            setCropFile(null);
+            onFile(cropped);
+          }}
+        />
+      ) : null}
+    </>
   );
 }

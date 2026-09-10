@@ -46,6 +46,10 @@ export default function SettingsPage() {
   const settings = data?.settings;
   const [importBusy, setImportBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   if (!settings) {
@@ -80,6 +84,19 @@ export default function SettingsPage() {
       return;
     }
     void importBackup(file);
+  }
+
+  async function removeAccount() {
+    if (confirmation !== "DELETE" || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await api("/api/profile", { method: "DELETE", body: JSON.stringify({ confirmation }) });
+      window.location.replace("/login");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Couldn’t delete your account. Please try again.");
+      setDeleting(false);
+    }
   }
 
   return (
@@ -199,6 +216,25 @@ export default function SettingsPage() {
                 }}
               />
             </div>
+          </section>
+          <section className="card p-5 md:p-6 lg:col-span-2">
+            <h2 className="text-base font-semibold" style={{ color: "var(--ink)" }}>Delete account</h2>
+            <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>
+              Permanently delete your Petals profile, lists, items, tags, and Catch notes. Shared links will stop working. This cannot be undone. Your Google account will not be deleted.
+            </p>
+            {confirmDelete ? (
+              <form className="mt-4 space-y-3" onSubmit={(event) => { event.preventDefault(); void removeAccount(); }}>
+                <label className="block text-sm" htmlFor="delete-account-confirmation">Type DELETE to confirm</label>
+                <input id="delete-account-confirmation" className="field w-full max-w-xs" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" autoFocus disabled={deleting} />
+                {deleteError && <p role="alert" className="text-sm text-rose-600">{deleteError}</p>}
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" className="rounded-xl border px-4 py-2 text-sm" disabled={deleting} onClick={() => { setConfirmDelete(false); setConfirmation(""); setDeleteError(""); }}>Cancel</button>
+                  <button type="submit" className="rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50" style={{ background: "#be123c", color: "#fff" }} disabled={confirmation !== "DELETE" || deleting}>{deleting ? "Deleting…" : "Permanently delete account"}</button>
+                </div>
+              </form>
+            ) : (
+              <button type="button" className="mt-4 rounded-xl border border-rose-200 px-4 py-2 text-sm font-medium" style={{ color: "#e11d48" }} onClick={() => setConfirmDelete(true)}>Delete my account</button>
+            )}
           </section>
       </div>
     </Shell>

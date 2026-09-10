@@ -142,6 +142,15 @@ function migrate(d: DatabaseSync) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS share_presence (
+      list_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      guest_name TEXT,
+      show_name INTEGER NOT NULL DEFAULT 0,
+      last_seen TEXT NOT NULL,
+      PRIMARY KEY (list_id, session_id),
+      FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+    );
     CREATE TABLE IF NOT EXISTS activity (
       id TEXT PRIMARY KEY,
       list_id TEXT NOT NULL,
@@ -181,6 +190,7 @@ function migrate(d: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS auth_sessions_owner_idx ON auth_sessions(owner_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS share_presence_list_seen_idx ON share_presence(list_id, last_seen);
   `);
   ensureColumn(d, "items", "mood_layout", "TEXT");
   ensureColumn(d, "owners", "name", "TEXT");
@@ -352,6 +362,29 @@ export function deleteAuthSession(sessionToken: string) {
   getDb().prepare("DELETE FROM auth_sessions WHERE token = ?").run(sessionToken);
 }
 
+/** Remove only this owner's workspace, including records without foreign keys. */
+export function deleteAccount(ownerId: string) {
+  const d = getDb();
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    d.prepare(`DELETE FROM item_tags WHERE item_id IN
+      (SELECT items.id FROM items JOIN lists ON items.list_id = lists.id WHERE lists.owner_device_id = ?)
+      OR tag_id IN (SELECT id FROM tags WHERE owner_device_id = ?)`).run(ownerId, ownerId);
+    for (const table of ["activity", "versions"]) {
+      d.prepare(`DELETE FROM ${table} WHERE list_id IN (SELECT id FROM lists WHERE owner_device_id = ?)`).run(ownerId);
+    }
+    d.prepare("DELETE FROM lists WHERE owner_device_id = ?").run(ownerId);
+    d.prepare("DELETE FROM tags WHERE owner_device_id = ?").run(ownerId);
+    d.prepare("DELETE FROM captures WHERE owner_device_id = ?").run(ownerId);
+    d.prepare("DELETE FROM auth_sessions WHERE owner_id = ?").run(ownerId);
+    d.prepare("DELETE FROM owners WHERE id = ?").run(ownerId);
+    d.exec("COMMIT");
+  } catch (error) {
+    d.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 export function markSeeded(ownerId: string) {
   getDb().prepare("UPDATE owners SET seeded = 1 WHERE id = ?").run(ownerId);
 }
@@ -454,9 +487,11 @@ function itemTags(itemId: string): Tag[] {
     .map(mapTag);
 }
 
-function itemAttachments(itemId: string, sharedOnly = false): Attachment[] {
-  const sql = sharedOnly
-    ? "SELECT * FROM attachments WHERE item_id = ? AND is_shared = 1 ORDER BY position, uploaded_at"
+function itemAttachments(itemId: string, opts?: { sharedOnly?: boolean; includeImages?: boolean }): Attachment[] {
+  const sql = opts?.sharedOnly
+    ? opts.includeImages
+      ? "SELECT * FROM attachments WHERE item_id = ? AND (is_shared = 1 OR type = 'image') ORDER BY position, uploaded_at"
+      : "SELECT * FROM attachments WHERE item_id = ? AND is_shared = 1 ORDER BY position, uploaded_at"
     : "SELECT * FROM attachments WHERE item_id = ? ORDER BY position, uploaded_at";
   return getDb()
     .prepare(sql)
@@ -475,7 +510,7 @@ function itemAttachments(itemId: string, sharedOnly = false): Attachment[] {
     }));
 }
 
-function mapItem(row: Record<string, unknown>, opts?: { hidePrivate?: boolean; sharedOnly?: boolean }): ListItem {
+function mapItem(row: Record<string, unknown>, opts?: { hidePrivate?: boolean; sharedOnly?: boolean; includeImages?: boolean }): ListItem {
   return {
     id: String(row.id),
     listId: String(row.list_id),
@@ -502,11 +537,11 @@ function mapItem(row: Record<string, unknown>, opts?: { hidePrivate?: boolean; s
     importedMetadata: parseJson(row.imported_metadata, null),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
-    attachments: itemAttachments(String(row.id), opts?.sharedOnly),
+    attachments: itemAttachments(String(row.id), opts),
   };
 }
 
-export function getList(listId: string, opts?: { hidePrivate?: boolean; sharedOnly?: boolean }) {
+export function getList(listId: string, opts?: { hidePrivate?: boolean; sharedOnly?: boolean; includeImages?: boolean }) {
   const row = getDb().prepare("SELECT * FROM lists WHERE id = ?").get(listId);
   if (!row) return null;
   const list = mapList(row);
@@ -948,6 +983,58 @@ export function shareByToken(tok: string) {
     active: true,
     createdAt: String(row.created_at),
   };
+}
+
+export type SharePresence = {
+  sessionId: string;
+  name: string | null;
+  lastSeen: string;
+};
+
+/** Records a short-lived viewer heartbeat for a shared list. */
+export function touchSharePresence(listId: string, sessionId: string, name: string | null, showName: boolean) {
+  const timestamp = now();
+  getDb()
+    .prepare(
+      `INSERT INTO share_presence (list_id, session_id, guest_name, show_name, last_seen)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(list_id, session_id) DO UPDATE SET guest_name = excluded.guest_name, show_name = excluded.show_name, last_seen = excluded.last_seen`,
+    )
+    .run(listId, sessionId, showName ? name : null, showName ? 1 : 0, timestamp);
+  return activeSharePresence(listId);
+}
+
+/** Viewers fall away automatically after two minutes without a heartbeat. */
+export function activeSharePresence(listId: string): SharePresence[] {
+  const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const database = getDb();
+  database.prepare("DELETE FROM share_presence WHERE last_seen < ?").run(cutoff);
+  return database
+    .prepare("SELECT session_id, guest_name, show_name, last_seen FROM share_presence WHERE list_id = ? AND last_seen >= ? ORDER BY last_seen DESC")
+    .all(listId, cutoff)
+    .map((row) => ({
+      sessionId: String(row.session_id),
+      name: Boolean(row.show_name) && row.guest_name ? String(row.guest_name) : null,
+      lastSeen: String(row.last_seen),
+    }));
+}
+
+export type CompletionAttribution = { itemId: string; guestName: string };
+
+/** The latest named guest completion per item, safe to show on the shared list itself. */
+export function completionAttributionsForList(listId: string): CompletionAttribution[] {
+  const seen = new Set<string>();
+  const attributions: CompletionAttribution[] = [];
+  for (const row of getDb()
+    .prepare("SELECT entity_id, guest_name FROM activity WHERE list_id = ? AND action = 'item_completed' AND guest_name IS NOT NULL ORDER BY timestamp DESC LIMIT 80")
+    .all(listId)) {
+    const itemId = row.entity_id ? String(row.entity_id) : "";
+    const guestName = row.guest_name ? String(row.guest_name) : "";
+    if (!itemId || !guestName || seen.has(itemId)) continue;
+    seen.add(itemId);
+    attributions.push({ itemId, guestName });
+  }
+  return attributions;
 }
 
 export function activityFor(listId: string): ActivityLog[] {
