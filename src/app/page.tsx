@@ -261,7 +261,7 @@ export default function DashboardPage() {
               <form className="todo-quick-add" onSubmit={(event) => void submitQuickAdd(event)}>
                 <input
                   className="todo-quick-add-input"
-                  placeholder={`Add to ${primaryList.title}…`}
+                  placeholder={primaryList.title.trim().toLowerCase() === "start here" ? "Add your first idea…" : `Add to ${primaryList.title}…`}
                   value={quickAdd}
                   onChange={(e) => setQuickAdd(e.target.value)}
                   disabled={quickAdding}

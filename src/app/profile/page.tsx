@@ -7,10 +7,60 @@ import { api } from "@/lib/api";
 import { useApp } from "@/components/providers";
 import { ListSkeleton, Shell } from "@/components/shell";
 import { TagManager } from "@/components/tag-manager";
+import { ACCENT, PASTELS, brightenPastel } from "@/lib/palette";
 
 function initials(name: string | null, email: string | null) {
   const source = (name || email || "Petals").trim();
   return source.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function WorkspaceAccent() {
+  const { data, patchSettings } = useApp();
+  const accent = brightenPastel(data?.settings.accentColor || ACCENT.hex);
+  const isCustom = !PASTELS.some((color) => color.hex.toLowerCase() === accent.toLowerCase());
+
+  return (
+    <section className="profile-accent-card">
+      <div className="profile-accent-heading">
+        <div>
+          <p className="profile-eyebrow">Personalize petals</p>
+          <h2>Workspace accent</h2>
+        </div>
+        <p>Colors your selected list and app details.</p>
+      </div>
+      <div className="profile-accent-swatches">
+        {PASTELS.map((color) => {
+          const selected = accent.toLowerCase() === color.hex.toLowerCase();
+          return (
+            <button
+              key={color.id}
+              type="button"
+              title={color.name}
+              aria-label={`${color.name} workspace accent`}
+              aria-pressed={selected}
+              onClick={() => void patchSettings({ accentColor: color.hex })}
+              className="profile-accent-choice"
+            >
+              <span className={selected ? "is-selected" : ""} style={{ backgroundColor: color.hex }} />
+              <small>{color.name}</small>
+            </button>
+          );
+        })}
+        <label title="Custom color" className="profile-accent-choice">
+          <span className={`profile-accent-custom ${isCustom ? "is-selected" : ""}`} style={isCustom ? { backgroundColor: accent } : undefined}>
+            {!isCustom ? "+" : null}
+            <input
+              type="color"
+              value={/^#[0-9a-fA-F]{6}$/.test(accent) ? accent : ACCENT.hex}
+              onChange={(event) => void patchSettings({ accentColor: event.target.value })}
+              aria-label="Custom workspace accent"
+            />
+          </span>
+          <small>Custom</small>
+        </label>
+      </div>
+    </section>
+  );
 }
 
 export default function ProfilePage() {
@@ -92,6 +142,7 @@ export default function ProfilePage() {
           </div>
         </section>
 
+        <WorkspaceAccent />
         <TagManager />
       </div>
     </Shell>

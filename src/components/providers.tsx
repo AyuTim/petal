@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { ACCENT, appAccentVars } from "@/lib/palette";
 import type { OwnerSettings, QuickCapture, Tag } from "@/lib/types";
 import { QuickCaptureDock } from "./quick-capture";
+import { WelcomeDialog } from "./welcome-dialog";
 
 type Toast = { message: string; action?: { label: string; onClick: () => void }; duration?: number; kind?: "filed" } | null;
 
@@ -111,6 +112,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           onChange={(captures: QuickCapture[]) => setData((current) => (current ? { ...current, captures } : current))}
         />
       )}
+      {isShare || isAuthPage ? null : <WelcomeDialog />}
       {toast ? (
         <div className={`toast card px-4 py-3 max-w-sm flex items-center gap-3 ${toast.kind === "filed" ? "is-filed" : ""}`}>
           <p className="text-sm">{toast.message}</p>

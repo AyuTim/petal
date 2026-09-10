@@ -188,6 +188,7 @@ function migrate(d: DatabaseSync) {
   ensureColumn(d, "owners", "avatar_url", "TEXT");
   ensureColumn(d, "owners", "google_sub", "TEXT");
   ensureColumn(d, "owners", "auth_provider", "TEXT");
+  ensureColumn(d, "owners", "onboarding_completed", "INTEGER NOT NULL DEFAULT 0");
   d.exec("CREATE UNIQUE INDEX IF NOT EXISTS owners_google_sub_unique ON owners(google_sub) WHERE google_sub IS NOT NULL;");
   applyStarterWorkspaceReset(d);
 }
@@ -286,6 +287,7 @@ function ownerProfileFromRow(row: Record<string, unknown>): OwnerProfile {
     avatarUrl: row.avatar_url ? String(row.avatar_url) : null,
     provider,
     createdAt: String(row.created_at),
+    onboardingCompleted: Boolean(row.onboarding_completed),
   };
 }
 
@@ -305,6 +307,12 @@ export function updateOwnerProfile(ownerId: string, patch: Partial<Pick<OwnerPro
   const name = patch.name == null ? owner.profile.name : patch.name.trim().slice(0, 80) || null;
   const avatarUrl = patch.avatarUrl == null ? owner.profile.avatarUrl : patch.avatarUrl || null;
   getDb().prepare("UPDATE owners SET name = ?, avatar_url = ? WHERE id = ?").run(name, avatarUrl, ownerId);
+  return getOwnerProfile(ownerId);
+}
+
+/** Marks the short first-visit introduction as seen for this profile. */
+export function completeOwnerOnboarding(ownerId: string) {
+  getDb().prepare("UPDATE owners SET onboarding_completed = 1 WHERE id = ?").run(ownerId);
   return getOwnerProfile(ownerId);
 }
 

@@ -1,6 +1,5 @@
 "use client";
 
-import { ACCENT, PASTELS, brightenPastel } from "@/lib/palette";
 import { api } from "@/lib/api";
 import { useApp } from "@/components/providers";
 import { ListSkeleton, Shell } from "@/components/shell";
@@ -57,9 +56,6 @@ export default function SettingsPage() {
     );
   }
 
-  const workspaceAccent = brightenPastel(settings.accentColor || ACCENT.hex);
-  const workspaceAccentIsCustom = !PASTELS.some((p) => p.hex.toLowerCase() === workspaceAccent.toLowerCase());
-
   async function importBackup(file: File) {
     setImportBusy(true);
     try {
@@ -90,11 +86,10 @@ export default function SettingsPage() {
     <Shell>
       <h1 className="page-title">Settings</h1>
       <p className="page-sub mb-8 mt-2">
-        Tune your workspace here. Your account and private profile live in the Profile section.
+        Tune how Petals feels. Your personal organization tools live in Profile.
       </p>
 
-      <div className="max-w-2xl">
-        <div className="flex flex-col gap-4">
+      <div className="settings-layout mx-auto grid w-full max-w-4xl items-start gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
           <section className="card p-5 md:p-6">
             <h2 className="text-base font-semibold" style={{ color: "var(--ink)" }}>
               Preferences
@@ -144,64 +139,6 @@ export default function SettingsPage() {
               </select>
             </label>
 
-            <div className="mt-5 border-t border-slate-200/60 pt-4">
-              <p className="text-sm font-medium" style={{ color: "var(--ink)" }}>
-                Workspace accent
-              </p>
-              <p className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-                Colors the selected list in the sidebar and other app chrome.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-4">
-                {PASTELS.map((p) => {
-                  const selected = workspaceAccent.toLowerCase() === p.hex.toLowerCase();
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      title={p.name}
-                      aria-label={p.name}
-                      aria-pressed={selected}
-                      onClick={() => void patchSettings({ accentColor: p.hex })}
-                      className="group flex cursor-pointer flex-col items-center gap-1.5"
-                    >
-                      <div
-                        className={`h-8 w-8 rounded-full border border-black/5 shadow-2xs transition-all group-hover:shadow-xs ring-offset-2 ${
-                          selected
-                            ? "scale-110 ring-2 ring-slate-900 ring-offset-2"
-                            : "group-hover:scale-110 hover:ring-2 hover:ring-slate-300"
-                        }`}
-                        style={{ backgroundColor: p.hex }}
-                      />
-                      <span className="text-[10px] font-medium text-slate-400 group-hover:text-slate-600">{p.name}</span>
-                    </button>
-                  );
-                })}
-                <label title="Custom color" className="group flex cursor-pointer flex-col items-center gap-1.5">
-                  <div
-                    className={`relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border transition-all ${
-                      workspaceAccentIsCustom
-                        ? "scale-110 border-transparent ring-2 ring-slate-900 ring-offset-2"
-                        : "border-dashed border-slate-300 bg-white/90 group-hover:border-slate-500"
-                    }`}
-                    style={workspaceAccentIsCustom ? { backgroundColor: workspaceAccent } : undefined}
-                  >
-                    {!workspaceAccentIsCustom ? (
-                      <span className="text-sm font-medium text-slate-400" aria-hidden>
-                        +
-                      </span>
-                    ) : null}
-                    <input
-                      type="color"
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                      value={/^#[0-9a-fA-F]{6}$/.test(workspaceAccent) ? workspaceAccent : ACCENT.hex}
-                      onChange={(e) => void patchSettings({ accentColor: e.target.value })}
-                      aria-label="Custom workspace accent"
-                    />
-                  </div>
-                  <span className="text-[10px] font-medium text-slate-400 group-hover:text-slate-600">Custom</span>
-                </label>
-              </div>
-            </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200/60 bg-white/80 p-6 shadow-xs">
@@ -263,8 +200,6 @@ export default function SettingsPage() {
               />
             </div>
           </section>
-        </div>
-
       </div>
     </Shell>
   );

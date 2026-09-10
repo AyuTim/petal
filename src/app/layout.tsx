@@ -19,8 +19,9 @@ export const metadata: Metadata = {
   title: "petals",
   description: "Private lists for shopping, wishes, and bucket-list plans.",
   icons: {
-    icon: [{ url: "/petals-flower-logo.png", type: "image/png" }],
-    apple: [{ url: "/petals-flower-logo.png", type: "image/png" }],
+    icon: [{ url: "/petals-flower-logo.png?v=2", type: "image/png", sizes: "any" }],
+    shortcut: ["/petals-flower-logo.png?v=2"],
+    apple: [{ url: "/petals-flower-logo.png?v=2", type: "image/png" }],
   },
 };
 

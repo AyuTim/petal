@@ -26,6 +26,7 @@ export type OwnerProfile = {
   avatarUrl: string | null;
   provider: "google" | "device";
   createdAt: string;
+  onboardingCompleted: boolean;
 };
 
 export type Tag = {
